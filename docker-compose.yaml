@@ -1,0 +1,8 @@
+version: '3.8'
+services:
+  kreaviq:
+    build: .
+    container_name: kreaviq_web
+    ports:
+      - "8081:80"
+    restart: always

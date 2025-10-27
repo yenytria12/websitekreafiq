@@ -8,7 +8,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 echo '📦 Mengambil source code...'
@@ -20,7 +19,7 @@ pipeline {
             steps {
                 echo '⚙️  Membuat image Docker...'
                 script {
-                    sh "docker build -t ${IMAGE_NAME}:latest ."
+                    bat "docker build -t %IMAGE_NAME%:latest ."
                 }
             }
         }
@@ -29,11 +28,11 @@ pipeline {
             steps {
                 echo '🧹 Menghapus container lama (jika ada)...'
                 script {
-                    sh """
-                    if [ \$(docker ps -q -f name=${CONTAINER_NAME}) ]; then
-                        docker stop ${CONTAINER_NAME}
-                        docker rm ${CONTAINER_NAME}
-                    fi
+                    bat """
+                    docker ps -q -f name=%CONTAINER_NAME% > tmp.txt
+                    for /f %%i in (tmp.txt) do docker stop %%i
+                    for /f %%i in (tmp.txt) do docker rm %%i
+                    del tmp.txt
                     """
                 }
             }
@@ -43,20 +42,18 @@ pipeline {
             steps {
                 echo '🚀 Menjalankan container baru...'
                 script {
-                    sh "docker run -d --name ${CONTAINER_NAME} -p ${PORT}:80 ${IMAGE_NAME}:latest"
+                    bat "docker run -d --name %CONTAINER_NAME% -p %PORT%:80 %IMAGE_NAME%:latest"
                 }
             }
         }
-
     }
 
     post {
         success {
-            echo "✅ Deployment berhasil! Akses di: http://localhost:${PORT}"
+            echo "✅ Deployment berhasil! Akses di: http://localhost:%PORT%"
         }
         failure {
             echo "❌ Build gagal. Cek log error di atas."
         }
     }
 }
-

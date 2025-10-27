@@ -2,48 +2,61 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "yourusername/yourapp"
+        IMAGE_NAME = 'kreaviq_web'
+        CONTAINER_NAME = 'kreaviq_web'
+        PORT = '8081'
     }
 
     stages {
+
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/username/repo-name.git'
+                echo '📦 Mengambil source code...'
+                checkout scm
             }
         }
 
-        stage('Build') {
+        stage('Build Docker Image') {
             steps {
-                echo 'Building project...'
-                sh 'docker build -t $DOCKER_IMAGE .'
-            }
-        }
-
-        stage('Test') {
-            steps {
-                echo 'Running tests...'
-                // contoh: untuk Laravel
-                // sh 'php artisan test'
-            }
-        }
-
-        stage('Push Docker Image') {
-            steps {
-                echo 'Pushing Docker image to registry...'
-                withCredentials([string(credentialsId: 'dockerhub-pass', variable: 'DOCKER_HUB_PASS')]) {
-                    sh "echo $DOCKER_HUB_PASS | docker login -u yourusername --password-stdin"
-                    sh 'docker push $DOCKER_IMAGE'
+                echo '⚙️  Membuat image Docker...'
+                script {
+                    sh "docker build -t ${IMAGE_NAME}:latest ."
                 }
             }
         }
+
+        stage('Stop & Remove Existing Container') {
+            steps {
+                echo '🧹 Menghapus container lama (jika ada)...'
+                script {
+                    sh """
+                    if [ \$(docker ps -q -f name=${CONTAINER_NAME}) ]; then
+                        docker stop ${CONTAINER_NAME}
+                        docker rm ${CONTAINER_NAME}
+                    fi
+                    """
+                }
+            }
+        }
+
+        stage('Run Docker Container') {
+            steps {
+                echo '🚀 Menjalankan container baru...'
+                script {
+                    sh "docker run -d --name ${CONTAINER_NAME} -p ${PORT}:80 ${IMAGE_NAME}:latest"
+                }
+            }
+        }
+
     }
 
     post {
         success {
-            echo 'Pipeline berhasil!'
+            echo "✅ Deployment berhasil! Akses di: http://localhost:${PORT}"
         }
         failure {
-            echo 'Pipeline gagal!'
+            echo "❌ Build gagal. Cek log error di atas."
         }
     }
 }
+

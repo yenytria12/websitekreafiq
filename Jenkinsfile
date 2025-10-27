@@ -2,58 +2,81 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'kreaviq_web'
-        CONTAINER_NAME = 'kreaviq_web'
-        PORT = '8081'
+        NODE_ENV = 'production'
+        NPM_CONFIG_CACHE = 'C:\\tmp\\.npm'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 60, unit: 'MINUTES')
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout SCM') {
             steps {
-                echo '📦 Mengambil source code...'
+                echo "📦 Checking out source code..."
                 checkout scm
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                echo "📥 Installing npm dependencies..."
+                bat '''
+                npm ci --cache %NPM_CONFIG_CACHE% --no-optional --registry=https://registry.npmjs.org/
+                '''
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                echo "🧪 Running tests..."
+                bat 'npm test -- --passWithNoTests'
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                echo "🏗️ Building application..."
+                bat 'npm run build'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                echo '⚙️  Membuat image Docker...'
-                script {
-                    bat "docker build -t %IMAGE_NAME%:latest ."
-                }
+                echo "🐳 Building Docker image..."
+                bat 'docker build -t my-web-app:latest .'
             }
         }
 
-        stage('Stop & Remove Existing Container') {
+        stage('Deploy with Docker Compose') {
             steps {
-                echo '🧹 Menghapus container lama (jika ada)...'
-                script {
-                    bat """
-                    docker ps -q -f name=%CONTAINER_NAME% > tmp.txt
-                    for /f %%i in (tmp.txt) do docker stop %%i
-                    for /f %%i in (tmp.txt) do docker rm %%i
-                    del tmp.txt
-                    """
-                }
+                echo "🚀 Deploying application..."
+                bat '''
+                docker-compose down
+                docker-compose up -d --build
+                '''
             }
         }
 
-        stage('Run Docker Container') {
+        stage('Health Check') {
             steps {
-                echo '🚀 Menjalankan container baru...'
-                script {
-                    bat "docker run -d --name %CONTAINER_NAME% -p %PORT%:80 %IMAGE_NAME%:latest"
-                }
+                echo "💓 Performing health check..."
+                bat 'curl -s -o NUL http://localhost:3000 || exit 1'
             }
         }
     }
 
     post {
         success {
-            echo "✅ Deployment berhasil! Akses di: http://localhost:%PORT%"
+            echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo "❌ Build gagal. Cek log error di atas."
+            echo "❌ Pipeline failed! Check logs for details."
+        }
+        always {
+            echo "🧹 Cleaning up workspace..."
+            deleteDir() // menggantikan cleanWs()
         }
     }
 }
